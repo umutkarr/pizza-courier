@@ -1,0 +1,1437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="color-scheme" content="light">
+<title>Pizza Courier</title>
+<style>
+  :root {
+    --bg: #f3efe5; --ink: #2b2b2b; --muted: #8a8475; --route: #e8473a; --best: #2d7dd2; --card: #fffdf8;
+    /* safe-area insets; the app shell overrides these with exact values */
+    --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px);
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overscroll-behavior: none; touch-action: manipulation; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #safe { position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none; padding: var(--sat) var(--sar) var(--sab) var(--sal); }
+  .hud { position: fixed; z-index: 2; }
+  .hidden { display: none !important; }
+
+  #hudTL { top: calc(var(--sat) + 18px); left: calc(var(--sal) + 24px); display: flex; gap: 14px; align-items: center; pointer-events: none; }
+  #lvlNum { font-size: 48px; font-weight: 300; line-height: 1; }
+  #lvlName { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; white-space: nowrap; }
+  #orderRow { display: flex; gap: 9px; }
+  #orderRow .o { position: relative; display: inline-flex; transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
+  #orderRow .o.done { transform: scale(1.15); }
+  #orderRow .o i { position: absolute; right: -8px; top: -8px; font-style: normal; font-size: 10px; font-weight: 700; color: var(--route); }
+
+  #hudTR { top: calc(var(--sat) + 16px); right: calc(var(--sar) + 24px); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+  .dial { position: relative; width: 88px; height: 88px; }
+  .dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .dial .track { fill: var(--card); stroke: #e6dfcf; stroke-width: 6; }
+  .dial .arc { fill: none; stroke: var(--route); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset .35s ease, stroke .3s; }
+  .dialTxt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .dialTxt b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dialTxt span { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-top: 1px; }
+  #par { font-size: 12px; color: var(--muted); text-align: right; line-height: 1.55; font-variant-numeric: tabular-nums; }
+
+  #bar { bottom: calc(var(--sab) + 18px); left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; }
+  .rb { width: 48px; height: 48px; border-radius: 50%; border: none; padding: 0; background: var(--card); color: var(--ink);
+    font: inherit; cursor: pointer; box-shadow: 0 2px 10px rgba(70,55,30,.14);
+    transition: transform .18s cubic-bezier(.34,1.56,.64,1), opacity .2s, box-shadow .2s; display: grid; place-items: center; }
+  .rb svg, .lv svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .rb svg .f, .lv svg .f { fill: currentColor; }
+  .rb:active:not(:disabled) { transform: scale(.9); }
+  .rb:disabled { opacity: .35; cursor: default; }
+  .rb.go { width: 66px; height: 66px; background: var(--route); color: #fff; }
+  .rb.go svg { width: 26px; height: 26px; }
+  .rb.go.ready { animation: pulse 1.3s ease-in-out infinite; }
+  .rb.on { box-shadow: 0 0 0 3px var(--best), 0 2px 10px rgba(70,55,30,.14); }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+  #tips { bottom: calc(var(--sab) + 96px); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(360px, calc(100vw - 40px));
+    text-align: center; font-size: 13px; color: var(--muted); line-height: 1.45; pointer-events: none; }
+  #tips b { color: var(--ink); font-weight: 600; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(243,239,229,.72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; animation: fade .25s; box-sizing: border-box; z-index: 10;
+    padding: calc(var(--sat) + 12px) calc(var(--sar) + 12px) calc(var(--sab) + 12px) calc(var(--sal) + 12px); }
+  .card { background: var(--card); border-radius: 18px; padding: 26px 28px; box-shadow: 0 12px 44px rgba(70,55,30,.2); box-sizing: border-box;
+    min-width: 300px; max-width: min(420px, 100%); max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    animation: cardIn .45s cubic-bezier(.34,1.56,.64,1); }
+  .card h2 { margin: 0; text-align: center; font-weight: 500; font-size: 22px; }
+  @keyframes cardIn { from { transform: scale(.85) translateY(20px); opacity: 0; } }
+  @keyframes fade { from { opacity: 0; } }
+  .stars { font-size: 44px; letter-spacing: 6px; text-align: center; margin: 6px 0 14px; }
+  .stars span { display: inline-block; color: #e4ddcd; transform: scale(0); animation: pop .5s cubic-bezier(.34,1.56,.64,1) forwards; }
+  .stars span.on { color: #f2b630; }
+  @keyframes pop { to { transform: scale(1); } }
+  .rows { display: grid; grid-template-columns: 1fr auto; gap: 4px 20px; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .rows span { color: var(--muted); }
+  .ordr { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .ordr div { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .btns { display: flex; gap: 8px; margin-top: 20px; }
+  .btn { flex: 1; border: none; border-radius: 10px; padding: 11px 12px; background: #ece6d8; color: var(--ink);
+    font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; transition: transform .15s cubic-bezier(.34,1.56,.64,1); }
+  .btn:active { transform: scale(.96); }
+  .btn.primary { background: var(--route); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--muted); font-weight: 500; width: 100%; margin-top: 8px; }
+  .btn.ghost.armed { color: var(--route); font-weight: 600; }
+  .note { text-align: center; font-size: 13px; margin: -6px 0 12px; color: var(--best); }
+
+  #levelsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+  .lv { border: none; background: #f1ebde; border-radius: 14px; padding: 12px 8px 10px; cursor: pointer; font: inherit; color: var(--ink);
+    transition: transform .18s cubic-bezier(.34,1.56,.64,1); }
+  .lv:active:not(:disabled) { transform: scale(.95); }
+  .lv:disabled { opacity: .45; cursor: default; }
+  .lv.cur { box-shadow: 0 0 0 2px var(--route); }
+  .lv.wide { grid-column: 1 / -1; }
+  .lv b { display: block; font-size: 26px; font-weight: 300; }
+  .lv small { display: block; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 2px 0 4px; }
+  .lv span { color: #f2b630; letter-spacing: 2px; font-size: 13px; }
+  .lv svg { width: 14px; height: 14px; stroke-width: 2.4; color: var(--muted); vertical-align: -2px; }
+
+  .set { margin-top: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+  .set .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; cursor: pointer; }
+  .set .row.col { flex-direction: column; align-items: stretch; gap: 8px; cursor: default; }
+  .set .row.col span { display: flex; justify-content: space-between; }
+  .set output { color: var(--route); font-weight: 600; }
+  .set input[type=range] { width: 100%; accent-color: var(--route); margin: 0; }
+  .set input[type=checkbox] { position: absolute; opacity: 0; pointer-events: none; }
+  .sw { position: relative; flex: none; width: 46px; height: 28px; border-radius: 14px; background: #e4ddcd; transition: background .2s; }
+  .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .25s cubic-bezier(.34,1.56,.64,1); }
+  input:checked + .sw { background: var(--route); }
+  input:checked + .sw::after { transform: translateX(18px); }
+  .ver { text-align: center; font-size: 11px; color: var(--muted); margin-top: 10px; letter-spacing: .04em; }
+
+  #dev { margin-top: 14px; padding-top: 12px; border-top: 1px solid #ece6d8; font-size: 12px; }
+  #dev h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  #dev label { display: block; margin-bottom: 8px; }
+  #dev label.check { display: flex; gap: 8px; align-items: center; }
+  #dev output { float: right; color: var(--route); font-weight: 600; }
+  #dev input[type=range] { width: 100%; accent-color: var(--route); }
+  #turnInfo { color: var(--muted); margin: -4px 0 10px; }
+
+  .howto ol { list-style: none; padding: 0; margin: 18px 0 4px; display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 1.45; }
+  .howto li { display: flex; gap: 14px; align-items: flex-start; }
+  .howto .ico { flex: none; width: 40px; height: 40px; display: grid; place-items: center; }
+  .howto .ico svg { width: 40px; height: 40px; }
+  .howto b { font-weight: 600; }
+  .prose { font-size: 14px; line-height: 1.55; margin-top: 14px; }
+  .prose p { margin: 0 0 10px; }
+
+  #toast { position: fixed; top: 40%; left: 0; right: 0; z-index: 5; text-align: center; pointer-events: none; opacity: 0; }
+  #toast.show { animation: toast 2.3s ease forwards; }
+  #toast h1 { margin: 0; font-weight: 300; font-size: 48px; letter-spacing: .03em; }
+  #toast p { margin: 4px 0 0; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); font-size: 13px; }
+  @keyframes toast { 0% { opacity: 0; transform: translateY(12px); } 14% { opacity: 1; transform: none; } 72% { opacity: 1; } 100% { opacity: 0; } }
+
+  @media (hover: hover) and (pointer: fine) {
+    .rb:hover:not(:disabled) { transform: scale(1.1); }
+    .btn:hover { transform: scale(1.04); }
+    .lv:hover:not(:disabled) { transform: scale(1.06); }
+  }
+  @media (max-width: 520px) {
+    #hudTL { left: calc(var(--sal) + 16px); gap: 10px; }
+    #hudTR { right: calc(var(--sar) + 16px); }
+    #lvlNum { font-size: 36px; }
+    #lvlName { font-size: 11px; letter-spacing: .12em; margin-bottom: 5px; }
+    #orderRow { gap: 7px; }
+    #orderRow svg { width: 17px; height: 17px; }
+    .dial { width: 74px; height: 74px; }
+    .dialTxt b { font-size: 15px; }
+    .dialTxt span { font-size: 8px; }
+    #par { font-size: 11px; }
+    #bar { gap: 8px; }
+    .rb { width: 46px; height: 46px; }
+    .rb.go { width: 62px; height: 62px; }
+    .card { min-width: 0; width: 100%; padding: 24px 22px; }
+    #toast h1 { font-size: 40px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div id="safe"></div>
+
+<div class="hud" id="hudTL">
+  <div id="lvlNum">1</div>
+  <div><div id="lvlName"></div><div id="orderRow"></div></div>
+</div>
+
+<div class="hud" id="hudTR">
+  <div class="dial">
+    <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="44"/><circle class="arc" id="dialArc" cx="50" cy="50" r="44"/></svg>
+    <div class="dialTxt"><b id="dialTime">0.0</b><span id="dialSub">planning</span></div>
+  </div>
+  <div id="par"></div>
+</div>
+
+<div class="hud hidden" id="tips"></div>
+
+<div class="hud" id="bar">
+  <button class="rb" id="bLevels" data-icon="menu" aria-label="Levels" title="Levels"></button>
+  <button class="rb" id="bUndo" data-icon="undo" aria-label="Undo" title="Undo (Backspace)"></button>
+  <button class="rb go" id="bGo" data-icon="play" aria-label="Deliver" title="Deliver (Enter)"></button>
+  <button class="rb" id="bClear" data-icon="clear" aria-label="Clear route" title="Clear route"></button>
+  <button class="rb" id="bHint" data-icon="hint" aria-label="Show best route" title="Show best route (H)"></button>
+  <button class="rb" id="bSettings" data-icon="gear" aria-label="Settings" title="Settings"></button>
+</div>
+
+<div class="overlay hidden" id="levels"><div class="card"><h2>Levels</h2><div id="levelsGrid"></div></div></div>
+<div class="overlay hidden" id="result"><div class="card" id="resultCard"></div></div>
+
+<div class="overlay hidden" id="settings"><div class="card">
+  <h2>Settings</h2>
+  <div class="set">
+    <label class="row"><span>Sound</span><input type="checkbox" id="sSound"><i class="sw"></i></label>
+    <label class="row" id="hapticsRow"><span>Haptics</span><input type="checkbox" id="sHaptics"><i class="sw"></i></label>
+    <label class="row col"><span>Drive speed <output id="oPlay"></output></span><input type="range" id="tPlay" min="2" max="30" step="1"></label>
+  </div>
+  <div id="dev" class="hidden">
+    <h3>Mechanics tuning (dev)</h3>
+    <label>Top speed (km/h) <output id="oVmax"></output><input type="range" id="tVmax" min="20" max="100" step="5"></label>
+    <label>Acceleration (m/s²) <output id="oAcc"></output><input type="range" id="tAcc" min="0.5" max="8" step="0.5"></label>
+    <label>Braking (m/s²) <output id="oBrk"></output><input type="range" id="tBrk" min="1" max="12" step="0.5"></label>
+    <label>Turn penalty <output id="oHarsh"></output><input type="range" id="tHarsh" min="0" max="6" step="0.5"></label>
+    <div id="turnInfo"></div>
+    <label class="check"><input type="checkbox" id="tReturn"> Return to pizzeria at the end</label>
+    <button class="btn" id="bRandom" style="width:100%;margin-top:6px">Random map</button>
+  </div>
+  <div class="btns"><button class="btn" id="bHowto">How to play</button><button class="btn" id="bPrivacy">Privacy</button></div>
+  <button class="btn ghost" id="bReset">Reset progress</button>
+  <div class="ver" id="ver"></div>
+</div></div>
+
+<div class="overlay hidden" id="howto"><div class="card howto">
+  <h2>How to play</h2>
+  <ol>
+    <li><span class="ico"><svg viewBox="0 0 40 40"><path d="M9 20h22" stroke="#e8473a" stroke-width="5" stroke-linecap="round"/><rect x="2.5" y="12.5" width="15" height="15" rx="4.5" fill="#fff" stroke="#2b2b2b" stroke-width="2.4"/><circle cx="32" cy="20" r="5.5" fill="#fff" stroke="#2b2b2b" stroke-width="2.4"/></svg></span>
+      <div><b>Draw one route</b> from the pizzeria through every house. <b>Drag</b> along the streets, or <b class="tapWord">tap</b> a crossing.</div></li>
+    <li><span class="ico"><svg viewBox="0 0 40 40"><path d="M6 32V14a6 6 0 0 1 6-6h22" fill="none" stroke="#e8473a" stroke-width="5" stroke-linecap="round"/><circle cx="8" cy="10" r="4.6" fill="#fff"/><circle cx="8" cy="10" r="2.2" fill="#2b2b2b"/></svg></span>
+      <div><b>Corners cost time.</b> The courier brakes for turns and stops at every house. White dots show where it must slow down.</div></li>
+    <li><span class="ico"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="#e8473a"/><path d="M16 12.5v15l12-7.5z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>
+      <div><b>Deliver</b> and compare with the best possible route. Get within 5% for <span style="color:#f2b630">★★★</span>.</div></li>
+  </ol>
+  <div class="btns"><button class="btn primary" id="bHowtoOk">Let's go</button></div>
+</div></div>
+
+<div class="overlay hidden" id="privacy"><div class="card">
+  <h2>Privacy</h2>
+  <div class="prose">
+    <p><b>Pizza Courier does not collect any data.</b></p>
+    <p>There are no accounts, ads, analytics, trackers or third-party services. The game works fully offline.</p>
+    <p>Your progress (stars, best times) and settings are stored only on this device. Deleting the app removes them.</p>
+  </div>
+  <div class="btns"><button class="btn" id="bPrivacyOk">Close</button></div>
+</div></div>
+
+<div id="toast"><h1 id="toastTitle"></h1><p id="toastSub"></p></div>
+
+<!-- Precomputed best routes for the fixed levels (written by `npm run solve`). Ignored automatically if the logic or physics change. -->
+<script type="application/json" id="solutions">{"logic":"3e0b75d9","physics":"18.055555555555554,3,5,3,10,false","levels":{"6,4,3,0,false,false,false,2,101":[14,15,16,22,16,10,11,10,9,3],"7,5,3,1,false,false,false,2,202":[11,12,13,20,19,26,25,24,23,22,21,28],"7,5,4,0,false,false,true,2,303":[16,9,2,1,0,7,14,21,22,29,30,31,32,25,26,27],"8,5,4,0,false,true,false,2,404":[19,20,12,4,5,6,14,15,14,22,30,38,37,36,35,34],"8,6,4,0,true,false,false,2,505":[20,21,22,30,38,30,22,14,6,5,4,3,2,1,0,8,9,10,18,26],"9,6,5,1,true,false,false,2,606":[31,40,39,48,39,40,41,42,43,52,43,34,25,16,7,6,5,4,3,2,1,10],"9,6,5,1,false,true,true,2,707":[32,31,30,29,20,11,10,9,0,9,10,11,12,13,14,15,16,8,16,25,34,43,52,53],"10,7,6,2,true,true,false,2,808":[34,24,15,6,7,8,9,8,18,28,38,48,47,46,45,44,54,64,54,44,43,42,52,42,41,40,30,20,10,0],"10,7,7,2,true,true,true,2,909":[25,14,3,2,1,0,10,20,30,40,50,51,52,62,63,53,54,55,56,46,47,58,48,38,39]}}</script>
+<script>
+// ===== LOGIC START =====
+const CFG = { spacing: 100, margin: 70, returnHome: false, K: 10, playback: 10 };
+const P = { vMax: 65 / 3.6, a: 3, b: 5, harsh: 3 };   // physics, SI units (m, m/s, m/s²)
+const ROAD = {
+  avenue: { cap: 70 / 3.6 },
+  street: { cap: 40 / 3.6 },
+  alley:  { cap: 20 / 3.6 },
+};
+const LEVELS = [
+  { name: 'First Shift',   cols: 6,  rows: 4, orders: 3, seed: 101 },
+  { name: 'The Park',      cols: 7,  rows: 5, orders: 3, seed: 202, parks: 1 },
+  { name: 'Old Town',      cols: 7,  rows: 5, orders: 4, seed: 303, oldTown: true },
+  { name: 'The Boulevard', cols: 8,  rows: 5, orders: 4, seed: 404, diag: true },
+  { name: 'Riverside',     cols: 8,  rows: 6, orders: 4, seed: 505, river: true },
+  { name: 'Two Bridges',   cols: 9,  rows: 6, orders: 5, seed: 606, river: true, parks: 1 },
+  { name: 'Downtown',      cols: 9,  rows: 6, orders: 5, seed: 707, diag: true, oldTown: true, parks: 1 },
+  { name: 'Rush Hour',     cols: 10, rows: 7, orders: 6, seed: 808, river: true, diag: true, parks: 2 },
+  { name: 'Friday Night',  cols: 10, rows: 7, orders: 7, seed: 909, river: true, diag: true, oldTown: true, parks: 2 },
+];
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function shuffle(arr, R) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  return arr;
+}
+
+class Heap {
+  constructor() { this.k = []; this.v = []; }
+  get size() { return this.k.length; }
+  push(k, v) {
+    const K = this.k, V = this.v; let i = K.length; K.push(k); V.push(v);
+    while (i > 0) { const p = (i - 1) >> 1; if (K[p] <= k) break; K[i] = K[p]; V[i] = V[p]; i = p; }
+    K[i] = k; V[i] = v;
+  }
+  pop() {
+    const K = this.k, V = this.v, rk = K[0], rv = V[0], lk = K.pop(), lv = V.pop(), n = K.length;
+    if (n) {
+      let i = 0;
+      for (;;) {
+        let l = 2 * i + 1; if (l >= n) break;
+        if (l + 1 < n && K[l + 1] < K[l]) l++;
+        if (K[l] >= lk) break;
+        K[i] = K[l]; V[i] = V[l]; i = l;
+      }
+      K[i] = lk; V[i] = lv;
+    }
+    return [rk, rv];
+  }
+}
+
+// ---------- map generation ----------
+// Neat octilinear city: a clean grid, one avenue row + column, and optional features
+// (diagonal boulevard, river with bridges, parks that block a crossing, an old town of slow alleys).
+function genLevel(def) {
+  for (let i = 0; i < 50; i++) { const lv = tryGenLevel(def, def.seed + i * 7717); if (lv) return lv; }
+  throw new Error('map generation failed');
+}
+function tryGenLevel(def, seed) {
+  const R = mulberry32(seed);
+  const { cols, rows } = def, sp = CFG.spacing, mg = CFG.margin;
+  const nodes = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
+    nodes.push({ id: nodes.length, c, r, x: mg + c * sp, y: mg + r * sp });
+  const id = (c, r) => r * cols + c;
+  const pick = (lo, hi) => lo + Math.floor(R() * (hi - lo + 1));
+  const avRow = pick(1, rows - 2), avCol = pick(1, cols - 2);
+  const old = def.oldTown ? { c: pick(0, cols - 3), r: pick(0, rows - 3) } : null;
+  const inOld = n => !!old && n.c >= old.c && n.c <= old.c + 2 && n.r >= old.r && n.r <= old.r + 2;
+
+  const edges = new Map();
+  const ek = (a, b) => a < b ? a * 100000 + b : b * 100000 + a;
+  const add = (a, b, type) => edges.set(ek(a, b), { a, b, type });
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (c < cols - 1) {
+      const a = id(c, r), b = id(c + 1, r);
+      add(a, b, r === avRow ? 'avenue' : inOld(nodes[a]) && inOld(nodes[b]) ? 'alley' : 'street');
+    }
+    if (r < rows - 1) {
+      const a = id(c, r), b = id(c, r + 1);
+      add(a, b, c === avCol ? 'avenue' : inOld(nodes[a]) && inOld(nodes[b]) ? 'alley' : 'street');
+    }
+  }
+  const diagNodes = new Set();
+  if (def.diag) {
+    const len = Math.min(cols, rows), c0 = pick(0, cols - len), flip = R() < 0.5;
+    for (let i = 0; i < len - 1; i++) {
+      const ca = flip ? cols - 1 - (c0 + i) : c0 + i, cb = flip ? ca - 1 : ca + 1;
+      add(id(ca, i), id(cb, i + 1), 'avenue');
+      diagNodes.add(id(ca, i)); diagNodes.add(id(cb, i + 1));
+    }
+  }
+  let river = null;
+  if (def.river) {
+    const k = Math.max(1, Math.min(cols - 3, pick(Math.floor(cols / 2) - 2, Math.floor(cols / 2))));
+    const bridges = new Set([avRow]);
+    while (bridges.size < (def.bridges || 2)) bridges.add(pick(0, rows - 1));
+    for (let r = 0; r < rows; r++) if (!bridges.has(r)) edges.delete(ek(id(k, r), id(k + 1, r)));
+    river = { k, x: mg + (k + 0.5) * sp, phase: R() * 6 };
+  }
+  const parks = [];
+  for (let tries = 0; parks.length < (def.parks || 0) && tries < 80; tries++) {
+    const c = pick(1, cols - 2), r = pick(1, rows - 2), n = id(c, r);
+    if (c === avCol || r === avRow || inOld(nodes[n])) continue;
+    if ([...diagNodes].some(d => Math.max(Math.abs(nodes[d].c - c), Math.abs(nodes[d].r - r)) <= 1)) continue;
+    if (river && (c === river.k || c === river.k + 1)) continue;
+    if (parks.some(p => Math.max(Math.abs(p.c - c), Math.abs(p.r - r)) < 3)) continue;
+    parks.push({ c, r });
+    for (const [key, e] of edges) if (e.a === n || e.b === n) edges.delete(key);
+  }
+
+  const list = [...edges.values()];
+  const parkSet = new Set(parks.map(p => id(p.c, p.r)));
+  const deg = new Array(nodes.length).fill(0);
+  list.forEach(e => { deg[e.a]++; deg[e.b]++; });
+  for (const n of nodes) { n.hidden = parkSet.has(n.id); if (!n.hidden && deg[n.id] < 2) return null; }
+  if (!connected(nodes, list)) return null;
+
+  const N1 = nodes.length + 1, adj = nodes.map(() => []), emap = new Map();
+  list.forEach((e, i) => {
+    const A = nodes[e.a], B = nodes[e.b];
+    e.id = i;
+    e.len = Math.hypot(A.x - B.x, A.y - B.y);
+    e.cap = ROAD[e.type].cap;
+    e.bridge = !!river && Math.min(A.c, B.c) === river.k && Math.max(A.c, B.c) === river.k + 1;
+    adj[e.a].push({ to: e.b, e }); adj[e.b].push({ to: e.a, e });
+    emap.set(e.a * N1 + e.b, e); emap.set(e.b * N1 + e.a, e);
+  });
+  const level = { def, seed, cols, rows, nodes, edges: list, adj, emap, N1, river, parks, old,
+    width: mg * 2 + (cols - 1) * sp, height: mg * 2 + (rows - 1) * sp };
+  placeStops(level, def.orders, R);
+  return level.houses.length === def.orders ? level : null;
+}
+function connected(nodes, edges) {
+  const adj = nodes.map(() => []);
+  edges.forEach(e => { adj[e.a].push(e.b); adj[e.b].push(e.a); });
+  const vis = nodes.filter(n => !n.hidden);
+  const seen = new Uint8Array(nodes.length), st = [vis[0].id]; seen[vis[0].id] = 1; let cnt = 1;
+  while (st.length) for (const v of adj[st.pop()]) if (!seen[v]) { seen[v] = 1; cnt++; st.push(v); }
+  return cnt === vis.length;
+}
+function placeStops(level, orders, R) {
+  const vis = level.nodes.filter(n => !n.hidden);
+  const cc = (level.cols - 1) / 2, cr = (level.rows - 1) / 2;
+  const central = vis.filter(n => Math.abs(n.c - cc) <= 1 && Math.abs(n.r - cr) <= 1);
+  const pz = central.length ? central[Math.floor(R() * central.length)] : vis[0];
+  const chosen = [pz], houses = [];
+  for (const minD of [3, 2, 1]) {   // spread houses out; relax only if needed
+    for (const n of shuffle(vis.slice(), R)) {
+      if (houses.length >= orders) break;
+      if (chosen.some(x => Math.abs(x.c - n.c) + Math.abs(x.r - n.r) < minD)) continue;
+      chosen.push(n); houses.push(n.id);
+    }
+    if (houses.length >= orders) break;
+  }
+  level.pizzeria = pz.id;
+  level.houses = houses;
+}
+const getEdge = (level, a, b) => level.emap.get(a * level.N1 + b);
+
+// ---------- physics ----------
+// turn angle: 0 = straight on, PI = U-turn
+function turnAngle(p, u, v) {
+  const ax = u.x - p.x, ay = u.y - p.y, bx = v.x - u.x, by = v.y - u.y;
+  return Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by));
+}
+const cornerFactor = th => Math.max(0.03, Math.cos(th / 2)) ** P.harsh;
+
+// trapezoidal velocity profile over one road segment
+function makeSeg(L, v0, v1, vc) {
+  const a = P.a, b = P.b;
+  let vp = vc;
+  let da = (vp * vp - v0 * v0) / (2 * a), db = (vp * vp - v1 * v1) / (2 * b);
+  if (da + db > L) {   // never reaches the cap: accelerate, then brake immediately
+    vp = Math.sqrt((2 * a * b * L + b * v0 * v0 + a * v1 * v1) / (a + b));
+    da = (vp * vp - v0 * v0) / (2 * a); db = (vp * vp - v1 * v1) / (2 * b);
+  }
+  const dc = Math.max(0, L - da - db);
+  const ta = (vp - v0) / a, tb = (vp - v1) / b, tc = vp > 1e-9 ? dc / vp : 0;
+  return { L, v0, v1, vc, vp, da, db, dc, ta, tb, tc, t: ta + tc + tb, acc: a, brk: b };
+}
+function segAt(s, tau) {
+  if (tau <= s.ta) return { d: s.v0 * tau + 0.5 * s.acc * tau * tau, v: s.v0 + s.acc * tau };
+  if (tau <= s.ta + s.tc) return { d: s.da + s.vp * (tau - s.ta), v: s.vp };
+  const u = Math.min(tau - s.ta - s.tc, s.tb);
+  return { d: s.da + s.dc + s.vp * u - 0.5 * s.brk * u * u, v: s.vp - s.brk * u };
+}
+
+// Exact time of a route. Game rule: you stop (v=0) at the start, the end, and the first visit to each house.
+// legOnly: only the endpoints are stops (used by the solver for stop-to-stop legs).
+function evalRoute(level, path, legOnly = false) {
+  const n = path.length, N = level.nodes;
+  const r = { path, segs: [], v: [], stop: [], total: 0, dist: 0, turns: 0, deliveries: [], complete: false };
+  const stop = new Array(n).fill(false);
+  stop[0] = stop[n - 1] = true;
+  r.stop = stop;
+  if (!legOnly) {
+    const hIdx = new Map(level.houses.map((h, i) => [h, i]));
+    const done = new Set();
+    for (let i = 1; i < n; i++) {
+      const h = hIdx.get(path[i]);
+      if (h !== undefined && !done.has(h)) { done.add(h); stop[i] = true; r.deliveries.push({ house: h, idx: i }); }
+    }
+    const lastDel = r.deliveries.length ? r.deliveries[r.deliveries.length - 1].idx : 0;
+    r.complete = done.size === level.houses.length &&
+      (!CFG.returnHome || (path[n - 1] === level.pizzeria && n - 1 > lastDel));
+  }
+  if (n < 2) { r.v = [0]; return r; }
+  const lens = [], caps = [];
+  for (let i = 0; i < n - 1; i++) {
+    const e = getEdge(level, path[i], path[i + 1]);
+    lens.push(e.len); caps.push(Math.min(P.vMax, e.cap)); r.dist += e.len;
+  }
+  const v = new Array(n);
+  for (let i = 0; i < n; i++) {
+    if (stop[i]) { v[i] = 0; continue; }
+    const th = turnAngle(N[path[i - 1]], N[path[i]], N[path[i + 1]]);
+    if (th > 0.45) r.turns++;
+    v[i] = Math.min(caps[i - 1], caps[i], P.vMax * cornerFactor(th));
+  }
+  for (let i = 0; i < n - 1; i++) v[i + 1] = Math.min(v[i + 1], Math.sqrt(v[i] * v[i] + 2 * P.a * lens[i]));
+  for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * P.b * lens[i]));
+  let t = 0;
+  for (let i = 0; i < n - 1; i++) {
+    const s = makeSeg(lens[i], v[i], v[i + 1], caps[i]);
+    s.from = path[i]; s.to = path[i + 1]; s.t0 = t; t += s.t;
+    r.segs.push(s);
+  }
+  r.v = v; r.total = t;
+  return r;
+}
+
+// ---------- solver ----------
+// additive time estimate (cruise at cap + time lost slowing for the corner), for candidate generation
+function approxStep(level, p, u, v) {
+  const N = level.nodes, e = getEdge(level, u, v), vc = Math.min(P.vMax, e.cap);
+  let c = e.len / vc;
+  if (p >= 0) {
+    const V = Math.min(vc, P.vMax, getEdge(level, p, u).cap);
+    const vk = Math.min(V, P.vMax * cornerFactor(turnAngle(N[p], N[u], N[v])));
+    c += (V - vk) ** 2 / (2 * V) * (1 / P.a + 1 / P.b);
+  }
+  return c;
+}
+function approxCost(level, path) {
+  let c = 0;
+  for (let i = 0; i < path.length - 1; i++) c += approxStep(level, i > 0 ? path[i - 1] : -1, path[i], path[i + 1]);
+  return c;
+}
+// Dijkstra over (node, previous node) states so turn costs are counted
+function dijkstraTurn(level, src, srcPrev, dst, banE, banN) {
+  const N1 = level.N1, dist = new Map(), from = new Map(), heap = new Heap();
+  const k0 = src * N1 + (srcPrev + 1);
+  dist.set(k0, 0); heap.push(0, [src, srcPrev, k0]);
+  while (heap.size) {
+    const [d, [u, p, k]] = heap.pop();
+    if (d > dist.get(k)) continue;
+    if (u === dst) {
+      const path = [u]; let kk = k;
+      while (from.has(kk)) { kk = from.get(kk); path.push(Math.floor(kk / N1)); }
+      return { path: path.reverse(), cost: d };
+    }
+    for (const { to } of level.adj[u]) {
+      if (to === p || banN.has(to) || banE.has(u * N1 + to)) continue;
+      const nd = d + approxStep(level, p, u, to), nk = to * N1 + (u + 1);
+      if (nd < (dist.get(nk) ?? Infinity)) { dist.set(nk, nd); from.set(nk, k); heap.push(nd, [to, u, nk]); }
+    }
+  }
+  return null;
+}
+// Yen's k-shortest simple paths (on the approximate cost)
+function kPaths(level, src, dst, K) {
+  const N1 = level.N1;
+  const first = dijkstraTurn(level, src, -1, dst, new Set(), new Set());
+  if (!first) return [];
+  const A = [first.path], B = [], seen = new Set([first.path.join()]);
+  for (let k = 1; k < K; k++) {
+    const last = A[k - 1];
+    for (let i = 0; i < last.length - 1; i++) {
+      const root = last.slice(0, i + 1), spur = last[i];
+      const banE = new Set(), banN = new Set(root.slice(0, -1));
+      for (const p of A) if (p.length > i + 1 && root.every((x, j) => p[j] === x)) banE.add(p[i] * N1 + p[i + 1]);
+      const r = dijkstraTurn(level, spur, i > 0 ? root[i - 1] : -1, dst, banE, banN);
+      if (!r) continue;
+      const full = root.concat(r.path.slice(1)), key = full.join();
+      if (seen.has(key)) continue;
+      seen.add(key); B.push({ path: full, cost: approxCost(level, full) });
+    }
+    if (!B.length) break;
+    B.sort((x, y) => x.cost - y.cost);
+    A.push(B.shift().path);
+  }
+  return A;
+}
+// best delivery order + paths: exact-time-best candidate per leg, then every order permutation, exactly re-evaluated
+function solve(level) {
+  const stops = [level.pizzeria, ...level.houses], m = level.houses.length, legs = {};
+  for (let i = 0; i <= m; i++) for (let j = 0; j <= m; j++) {
+    if (i === j || (j === 0 && !CFG.returnHome)) continue;
+    let best = null;
+    for (const p of kPaths(level, stops[i], stops[j], CFG.K)) {
+      const t = evalRoute(level, p, true).total;
+      if (!best || t < best.t) best = { p, t };
+    }
+    legs[i + ',' + j] = best;
+  }
+  let best = null;
+  const perm = [], used = new Array(m + 1).fill(false);
+  (function rec() {
+    if (perm.length === m) {
+      const seq = [0, ...perm]; if (CFG.returnHome) seq.push(0);
+      let path = [stops[0]];
+      for (let k = 0; k < seq.length - 1; k++) path = path.concat(legs[seq[k] + ',' + seq[k + 1]].p.slice(1));
+      const r = evalRoute(level, path);
+      if (!best || r.total < best.total) best = r;
+      return;
+    }
+    for (let h = 1; h <= m; h++) if (!used[h]) { used[h] = true; perm.push(h); rec(); perm.pop(); used[h] = false; }
+  })();
+  return best;
+}
+// shortest-distance path (used for click auto-fill)
+function shortestByLength(level, src, dst) {
+  const dist = new Array(level.nodes.length).fill(Infinity), prev = new Array(level.nodes.length).fill(-1), heap = new Heap();
+  dist[src] = 0; heap.push(0, src);
+  while (heap.size) {
+    const [d, u] = heap.pop();
+    if (d > dist[u]) continue;
+    if (u === dst) break;
+    for (const { to, e } of level.adj[u]) if (d + e.len < dist[to]) { dist[to] = d + e.len; prev[to] = u; heap.push(dist[to], to); }
+  }
+  if (dist[dst] === Infinity) return null;
+  const path = [dst];
+  while (path[path.length - 1] !== src) path.push(prev[path[path.length - 1]]);
+  return path.reverse();
+}
+// ===== LOGIC END =====
+// ===== PLATFORM: app-shell bridge, saves, sound, haptics, background solver =====
+if (!CanvasRenderingContext2D.prototype.roundRect) {   // iOS < 16
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.max(0, Math.min(+r || 0, w / 2, h / 2));
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r); this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+}
+const HOST = window.__PC_NATIVE__ || null;   // injected by the iOS/Android shell before load; null in a plain browser
+const DEV = HOST ? !!HOST.dev : /[?&]dev\b/.test(location.search);
+const post = msg => { try { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch {} };
+window.addEventListener('error', ev => post({ type: 'error', message: String(ev.message), at: `${ev.lineno}:${ev.colno}` }));
+
+// one save object; the shell keeps the durable copy, localStorage is the browser fallback
+const SAVE_KEY = 'pizzaCourier.save';
+const SAVE = (() => {
+  let s = HOST && HOST.save;
+  if (!s) try { s = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
+  if (!s) try { const old = JSON.parse(localStorage.getItem('pizzaCourier.stars')); if (old) s = { stars: old }; } catch {}
+  if (!s || typeof s !== 'object') s = {};
+  return {
+    v: 1, stars: {}, best: {}, level: 0, howto: false, ...s,
+    settings: { sound: true, haptics: true, playback: 10, ...(s.settings || {}) },
+  };
+})();
+function persist() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch {}
+  post({ type: 'save', data: SAVE });
+}
+
+let lastTick = 0;
+function haptic(kind) {   // selection | light | medium | success
+  if (!HOST || !SAVE.settings.haptics) return;
+  const t = performance.now();
+  if (kind === 'selection') { if (t - lastTick < 40) return; lastTick = t; }
+  post({ type: 'haptic', kind });
+}
+
+// soft synthesized sounds (no audio files); WebKit only lets audio start inside a user gesture
+const SFX = (() => {
+  const PENTA = [0, 2, 4, 7, 9];
+  let ac = null, out = null;
+  function unlock() {
+    if (!SAVE.settings.sound) return;
+    try {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+        ac = new AC(); out = ac.createGain(); out.gain.value = 0.6; out.connect(ac.destination);
+      }
+      if (ac.state !== 'running') ac.resume();
+    } catch {}
+  }
+  function tone(freq, at, { dur = 0.16, type = 'triangle', vol = 0.1, slide = 0 } = {}) {
+    if (!ac || !SAVE.settings.sound || ac.state !== 'running') return;
+    try {
+      const t = ac.currentTime + Math.max(0, at || 0), o = ac.createOscillator(), g = ac.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, t);
+      if (slide) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+    } catch {}
+  }
+  const note = step => 392 * 2 ** ((PENTA[((step % 5) + 5) % 5] + 12 * Math.floor(step / 5)) / 12);
+  return {
+    unlock,
+    suspend() { try { if (ac && ac.state === 'running') ac.suspend(); } catch {} },
+    snap(step, at) { tone(note(Math.min(step, 11)), at, { dur: 0.12, vol: 0.07 }); },
+    house(at) { tone(659.25, at, { dur: 0.32, type: 'sine', vol: 0.12 }); tone(987.77, (at || 0) + 0.05, { dur: 0.36, type: 'sine', vol: 0.07 }); },
+    undo() { tone(349.23, 0, { dur: 0.1, vol: 0.05, slide: 0.8 }); },
+    clear() { tone(523.25, 0, { dur: 0.24, vol: 0.06, slide: 0.5 }); },
+    go() { tone(392, 0, { dur: 0.2, type: 'sine', vol: 0.09, slide: 1.5 }); },
+    deliver() { tone(1046.5, 0, { dur: 0.5, type: 'sine', vol: 0.1 }); tone(1568, 0.04, { dur: 0.45, type: 'sine', vol: 0.05 }); },
+    stars(n) { [783.99, 987.77, 1174.66].slice(0, n).forEach((f, k) => tone(f, 0.3 + k * 0.17, { dur: 0.42, type: 'sine', vol: 0.11 })); },
+  };
+})();
+for (const type of ['pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, SFX.unlock, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (document.hidden) SFX.suspend(); });
+
+// Best routes: precomputed for the fixed levels, otherwise solved in a Web Worker so the UI never stalls
+// (the hardest levels take seconds to solve on a phone).
+const norm = s => s.replace(/\r\n?/g, '\n');
+const hashStr = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); };
+const LOGIC_SRC = (() => {
+  try {
+    const s = norm(document.currentScript.text), a = s.indexOf('// ===== LOGIC ' + 'START'), b = s.indexOf('// ===== LOGIC ' + 'END');
+    return a >= 0 && b > a ? s.slice(a, b) : null;
+  } catch { return null; }
+})();
+const physicsSig = () => [P.vMax, P.a, P.b, P.harsh, CFG.K, CFG.returnHome].join();
+const defKey = (def, seed) => [def.cols, def.rows, def.orders, def.parks || 0, !!def.river, !!def.diag, !!def.oldTown, def.bridges || 2, seed].join();
+const SOLUTIONS = (() => { try { return JSON.parse(document.getElementById('solutions').textContent); } catch { return {}; } })();
+function precomputed(lv) {
+  const sol = SOLUTIONS;
+  if (!sol.levels || !LOGIC_SRC || sol.logic !== hashStr(LOGIC_SRC) || sol.physics !== physicsSig()) return null;
+  const path = sol.levels[defKey(lv.def, lv.seed)];
+  if (!path) return null;
+  try { const r = evalRoute(lv, path); return r.complete ? r : null; } catch { return null; }
+}
+const solveBest = (() => {
+  let worker = null, seq = 0, pending = null;
+  const settle = (id, fn) => { if (pending && pending.id === id) { clearTimeout(pending.timer); pending = null; fn(); } };
+  if (LOGIC_SRC && window.Worker && window.Blob && window.URL) {
+    try {
+      const src = LOGIC_SRC + `
+self.onmessage = e => {
+  const m = e.data; let path = null;
+  try { Object.assign(P, m.P); Object.assign(CFG, m.CFG); const lv = tryGenLevel(m.def, m.seed); const r = lv && solve(lv); path = r ? r.path : null; } catch (err) {}
+  self.postMessage({ id: m.id, path });
+};`;
+      worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = e => { const p = pending; if (p) settle(e.data.id, () => p.done(e.data.path)); };
+      worker.onerror = () => { worker = null; const p = pending; if (p) settle(p.id, p.fallback); };
+    } catch { worker = null; }
+  }
+  return function (lv, cb) {
+    const id = ++seq;
+    if (pending) clearTimeout(pending.timer);
+    pending = null;
+    const fallback = () => setTimeout(() => { if (id === seq) cb(solve(lv), 'main thread'); }, 30);
+    const pre = precomputed(lv);
+    if (pre) { setTimeout(() => { if (id === seq) cb(pre, 'precomputed'); }, 0); return; }
+    if (!worker) { fallback(); return; }
+    pending = {
+      id, fallback,
+      done: path => { if (id !== seq) return; let r = null; try { r = path && evalRoute(lv, path); } catch {} r && r.complete ? cb(r, 'worker') : fallback(); },
+      timer: setTimeout(() => settle(id, fallback), 15000),
+    };
+    worker.postMessage({ id, def: lv.def, seed: lv.seed, P: { ...P }, CFG: { returnHome: CFG.returnHome, K: CFG.K } });
+  };
+})();
+
+// ===== VISUALS =====
+const $ = s => document.querySelector(s);
+const canvas = $('#map'), ctx = canvas.getContext('2d');
+const COL = {
+  bg: '#f3efe5', ink: '#2b2b2b', route: '#e8473a', best: '#2d7dd2', river: '#cfe4ee', park: '#dfe9d2', tree: '#cbdcb9',
+  old: '#ebe3d0', rail: '#b9ae96', amber: '#f2a531',
+  road: { avenue: ['#d5cbb4', 13], street: ['#ddd5c3', 8], alley: ['#d2c9b4', 3.5] },
+};
+const ICON = {
+  menu: '<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>',
+  undo: '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path class="f" d="M8 5.5v13l10.5-6.5z"/></svg>',
+  skip: '<svg viewBox="0 0 24 24"><path class="f" d="M4.5 6.5v11l7.5-5.5zM12.5 6.5v11l7.5-5.5z"/></svg>',
+  clear: '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
+  hint: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle class="f" cx="12" cy="12" r="2.6"/></svg>',
+  gear: '<svg viewBox="0 0 24 24"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect class="f" x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+};
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const easeOutCubic = x => 1 - (1 - x) ** 3;
+const easeOutBack = x => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+const lerp = (A, B, f) => ({ x: A.x + (B.x - A.x) * f, y: A.y + (B.y - A.y) * f });
+const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return m ? `${m}:${s.toFixed(1).padStart(4, '0')}` : `${s.toFixed(1)}s`; };
+const kmh = v => Math.round(v * 3.6);
+const starsFor = ratio => ratio <= 1.05 ? 3 : ratio <= 1.2 ? 2 : 1;
+const TAP = matchMedia('(hover: hover) and (pointer: fine)').matches ? 'click' : 'tap';
+
+// Each order is a Mini Metro-style station shape instead of a letter.
+const SHAPES = (() => {
+  const poly = (n, r, dy = 0) => Array.from({ length: n }, (_, i) => {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [r * Math.cos(a), r * Math.sin(a) + dy];
+  });
+  const star = Array.from({ length: 10 }, (_, i) => {
+    const r = i % 2 ? 0.55 : 1.25, a = -Math.PI / 2 + i * Math.PI / 5; return [r * Math.cos(a), r * Math.sin(a) + 0.08];
+  });
+  const w = 0.4, L = 1.05;
+  const cross = [[-w,-L],[w,-L],[w,-w],[L,-w],[L,w],[w,w],[w,L],[-w,L],[-w,w],[-L,w],[-L,-w],[-w,-w]];
+  return [null, poly(3, 1.3, 0.2), [[-.88,-.88],[.88,-.88],[.88,.88],[-.88,.88]], poly(4, 1.2), poly(5, 1.1, 0.05), star, cross];
+})();
+function shapePath(i, r) {
+  const pts = SHAPES[i % SHAPES.length];
+  ctx.beginPath();
+  if (!pts) { ctx.arc(0, 0, r, 0, Math.PI * 2); return; }
+  pts.forEach(([x, y], k) => k ? ctx.lineTo(x * r, y * r) : ctx.moveTo(x * r, y * r));
+  ctx.closePath();
+}
+function shapeSVG(i, filled, size = 20) {
+  const pts = SHAPES[i % SHAPES.length], fill = filled ? COL.route : '#fff';
+  const attrs = `fill="${fill}" stroke="${COL.ink}" stroke-width="0.32" stroke-linejoin="round"`;
+  const body = pts ? `<polygon points="${pts.map(p => p.join(',')).join(' ')}" ${attrs}/>` : `<circle r="1" ${attrs}/>`;
+  return `<svg viewBox="-1.65 -1.65 3.3 3.3" width="${size}" height="${size}">${body}</svg>`;
+}
+
+// ---------- state ----------
+let levelIdx = 0, level, route, addedAt, evalR, optimal = null, showBest = false, phase = 'plan', drive = null;
+let hover = null, preview = null, cursor = null, drag = null, pressNode = null, activePointer = null;
+let retracts = [], effects = [], bounces = new Map(), levelT0 = 0, NOW = performance.now(), solveTimer, tuneTimer, booted = false, awaitingResult = null, solvedBy = null;
+const view = { s: 1, ox: 0, oy: 0, w: 0, h: 0, dpr: 1 };
+
+const unlocked = i => DEV || i === 0 || (SAVE.stars[i - 1] || 0) > 0;   // i === LEVELS.length is the random-map mode
+function record(i, stars, time) {
+  const prevBest = SAVE.best[i], pb = prevBest != null && time < prevBest - 0.05;
+  if (!((SAVE.stars[i] || 0) >= stars)) SAVE.stars[i] = stars;
+  if (prevBest == null || time < prevBest) SAVE.best[i] = Math.round(time * 10) / 10;
+  persist();
+  return pb;
+}
+
+function setLevel(def, idx) {
+  const lv = genLevel(def);   // may throw for an unlucky random seed; the current level stays untouched then
+  levelIdx = idx; level = lv; awaitingResult = null;
+  levelT0 = NOW;
+  route = [level.pizzeria]; addedAt = [0];
+  retracts = []; effects = []; bounces.clear();
+  showBest = false; phase = 'plan'; drive = null; hover = preview = null; drag = null; pressNode = null;
+  closeOverlays(); $('#result').classList.add('hidden');
+  $('#lvlNum').textContent = idx != null ? idx + 1 : '∞';
+  $('#lvlName').textContent = def.name;
+  if (idx != null && SAVE.level !== idx) { SAVE.level = idx; persist(); }
+  toast(idx != null ? `Level ${idx + 1}` : 'Random map', def.name);
+  refresh(); resize(); resolve();
+}
+function replayIntro() {
+  levelT0 = NOW;
+  toast(levelIdx != null ? `Level ${levelIdx + 1}` : 'Random map', level.def.name);
+}
+// Lay the grid out with its long side along the screen's long side (portrait phones get a transposed city).
+// A transpose keeps every length and turn angle, so times and the solver's answer are unchanged.
+function orient(flip) {
+  const sp = CFG.spacing, mg = CFG.margin;
+  level.flip = flip;
+  for (const n of level.nodes) { n.x = mg + (flip ? n.r : n.c) * sp; n.y = mg + (flip ? n.c : n.r) * sp; }
+  const w = mg * 2 + (level.cols - 1) * sp, h = mg * 2 + (level.rows - 1) * sp;
+  level.width = flip ? h : w; level.height = flip ? w : h;
+  const pz = level.nodes[level.pizzeria];
+  let maxD = 1;
+  for (const e of level.edges) {
+    const A = level.nodes[e.a], B = level.nodes[e.b];
+    e.mid = lerp(A, B, 0.5); e.d = Math.hypot(e.mid.x - pz.x, e.mid.y - pz.y); maxD = Math.max(maxD, e.d);
+  }
+  for (const e of level.edges) e.delay = e.d / maxD * 650;   // roads draw outward from the pizzeria
+  effects = [];
+}
+function refresh() { evalR = evalRoute(level, route); awaitingResult = null; updateHud(); }
+function resolve() {
+  optimal = null; updateHud();
+  const lv = level;
+  clearTimeout(solveTimer);
+  solveTimer = setTimeout(() => solveBest(lv, (r, how) => {
+    if (lv !== level) return;
+    optimal = r; solvedBy = how; updateHud();
+    if (awaitingResult && phase === 'plan') { const done = awaitingResult; awaitingResult = null; showResult(done); }
+  }), 30);
+}
+
+// ---------- route editing ----------
+function addNodes(nodes) {
+  const before = new Set(evalR.deliveries.map(d => d.house)), first = route.length;
+  nodes.forEach((n, j) => { route.push(n); addedAt.push(NOW + j * 55); });
+  refresh(); hideResult();
+  for (let i = route.length - nodes.length; i < route.length; i++) {
+    const t = addedAt[i] + 130, n = level.nodes[route[i]];
+    effects.push({ type: 'ring', x: n.x, y: n.y, r0: 4, r1: 16, t0: t, dur: 320, color: COL.route });
+  }
+  for (let j = 0; j < Math.min(nodes.length, 8); j++) SFX.snap(first - 1 + j, j * 0.055 + 0.12);
+  haptic('selection');
+  for (const d of evalR.deliveries) if (!before.has(d.house)) {
+    const n = level.nodes[route[d.idx]], t = addedAt[d.idx] + 130;
+    bounces.set(route[d.idx], t);
+    effects.push({ type: 'ring', x: n.x, y: n.y, r0: 12, r1: 32, t0: t, dur: 480, color: COL.route });
+    SFX.house((t - NOW) / 1000);
+    haptic('light');
+  }
+}
+function undo() {
+  if (phase !== 'plan' || route.length < 2) return;
+  retracts.push({ a: route[route.length - 2], b: route[route.length - 1], t0: NOW });
+  route.pop(); addedAt.pop(); refresh(); hideResult();
+  SFX.undo(); haptic('selection');
+}
+function clearRoute() {
+  if (phase !== 'plan') return;
+  if (route.length > 1) { SFX.clear(); haptic('light'); }
+  for (let i = 1; i < route.length; i++) retracts.push({ a: route[i - 1], b: route[i], t0: NOW + (route.length - 1 - i) * 25 });
+  route = [level.pizzeria]; addedAt = [0]; refresh(); hideResult();
+}
+function pathTo(n) {
+  const end = route[route.length - 1];
+  if (n == null || n === end) return null;
+  if (level.adj[end].some(x => x.to === n)) return [end, n];
+  return shortestByLength(level, end, n);
+}
+
+// ---------- drive ----------
+function deliveryTime(r, d) { const idx = r.deliveries[d].idx, s = r.segs[idx - 1]; return s.t0 + s.t; }
+function courierAt(r, t) {
+  const N = level.nodes;
+  let i = 0;
+  while (i + 1 < r.segs.length && r.segs[i + 1].t0 <= t) i++;
+  const s = r.segs[i], { d, v } = segAt(s, Math.max(0, t - s.t0));
+  const A = N[s.from], B = N[s.to];
+  return { pos: lerp(A, B, Math.min(1, d / s.L)), v, idx: i, ang: Math.atan2(B.y - A.y, B.x - A.x) };
+}
+function startDrive(r, who) {
+  if (!r || r.segs.length === 0) return;
+  phase = 'drive';
+  drive = { r, who, simT: 0, next: 0, delivered: new Set(), ang: courierAt(r, 0).ang, doneAt: null };
+  hover = preview = null; drag = null; pressNode = null;
+  SFX.go(); haptic('medium');
+  hideResult(); updateHud();
+}
+function stepDrive(dt) {
+  const r = drive.r;
+  drive.simT = Math.min(r.total, drive.simT + dt * CFG.playback);
+  while (drive.next < r.deliveries.length && drive.simT >= deliveryTime(r, drive.next)) {
+    const d = r.deliveries[drive.next], node = level.houses[d.house], n = level.nodes[node];
+    drive.delivered.add(d.house);
+    bounces.set(node, NOW);
+    effects.push({ type: 'ring', x: n.x, y: n.y, r0: 12, r1: 38, t0: NOW, dur: 550, color: drive.who === 'player' ? COL.route : COL.best });
+    effects.push({ type: 'text', x: n.x, y: n.y - 30, t0: NOW, dur: 1300, text: fmt(deliveryTime(r, drive.next)), color: COL.ink });
+    SFX.deliver(); haptic('light');
+    drive.next++;
+  }
+  const c = courierAt(r, drive.simT);
+  const dA = ((c.ang - drive.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  drive.ang += dA * Math.min(1, dt * 12);
+  drive.pos = c.pos; drive.v = c.v; drive.seg = c.idx;
+  setDial(drive.simT / r.total, fmt(drive.simT), `${kmh(c.v)} km/h`, drive.who === 'player' ? COL.route : COL.best);
+  if (drive.simT >= r.total && drive.doneAt == null) drive.doneAt = NOW;
+  if (drive.doneAt != null && NOW - drive.doneAt > 650) finishDrive();
+}
+function finishDrive() {
+  const d = drive;
+  phase = 'plan'; drive = null;
+  if (d.who === 'player') { if (optimal) showResult(d.r); else awaitingResult = d.r; }   // the result waits for the solver if needed
+  if (d.who === 'opt') showBest = true;
+  updateHud();
+}
+
+// ---------- rendering ----------
+function readInsets() {
+  const cs = getComputedStyle($('#safe'));
+  return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+}
+function resize() {
+  if (!level) return;
+  const w = innerWidth, h = innerHeight, ins = readInsets(), sp = CFG.spacing, mg = CFG.margin;
+  view.dpr = devicePixelRatio || 1; view.w = w; view.h = h;
+  canvas.width = Math.round(w * view.dpr); canvas.height = Math.round(h * view.dpr);
+  // keep the map clear of the HUD (top corners, button bar, level-1 tip line)
+  const top = Math.max($('#hudTL').getBoundingClientRect().bottom, $('.dial').getBoundingClientRect().bottom) + 10;
+  const bottom = h - $('#bar').getBoundingClientRect().top + 8 + (levelIdx === 0 ? 44 : 0);
+  const left = ins.l + 6, right = ins.r + 6;
+  const aw = Math.max(60, w - left - right), ah = Math.max(60, h - top - bottom);
+  const W = mg * 2 + (level.cols - 1) * sp, H = mg * 2 + (level.rows - 1) * sp;
+  const s0 = Math.min(aw / W, ah / H), s1 = Math.min(aw / H, ah / W);
+  const flip = level.flip == null ? s1 > s0 * 1.02 : (level.flip ? s1 * 1.02 >= s0 : s1 > s0 * 1.02);
+  if (flip !== level.flip) orient(flip);
+  view.s = Math.max(0.2, flip ? s1 : s0);
+  view.ox = left + (aw - level.width * view.s) / 2;
+  view.oy = top + Math.max(0, ah - level.height * view.s) / 2;
+}
+const line = (a, b) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+
+// polyline with rounded corners (Mini Metro style bends)
+function strokeRounded(pts, color, width, { alpha = 1, dash = null, dashOff = 0 } = {}) {
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (dash) { ctx.setLineDash(dash); ctx.lineDashOffset = dashOff; }
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+    const d1 = Math.hypot(b.x - a.x, b.y - a.y), d2 = Math.hypot(c.x - b.x, c.y - b.y);
+    if (d1 < 1e-3 || d2 < 1e-3 || turnAngle(a, b, c) > 2.6) { ctx.lineTo(b.x, b.y); continue; }
+    ctx.arcTo(b.x, b.y, c.x, c.y, Math.min(24, d1 / 2, d2 / 2));
+  }
+  const L = pts[pts.length - 1]; ctx.lineTo(L.x, L.y);
+  ctx.stroke(); ctx.restore();
+}
+// route points, with each newly added segment growing out of the previous one
+function growingPoints(path, times) {
+  const N = level.nodes, pts = [N[path[0]]];
+  for (let i = 1; i < path.length; i++) {
+    const p = clamp01((NOW - times[i]) / 140);
+    if (p <= 0) break;
+    if (p < 1) { pts.push(lerp(N[path[i - 1]], N[path[i]], easeOutCubic(p))); break; }
+    pts.push(N[path[i]]);
+  }
+  return pts;
+}
+function terminalBar(pts, color) {   // the little "T" at the end of a Mini Metro line
+  if (pts.length < 2) return;
+  const a = pts[pts.length - 2], b = pts[pts.length - 1], ang = Math.atan2(b.y - a.y, b.x - a.x);
+  if (Math.hypot(b.x - a.x, b.y - a.y) < 1) return;
+  ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(ang);
+  ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.lineCap = 'round'; line({ x: 0, y: -9 }, { x: 0, y: 9 });
+  ctx.restore();
+}
+function drawSlice(x, y, s) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.beginPath(); ctx.moveTo(0, s); ctx.lineTo(-s * 0.85, -s * 0.55); ctx.quadraticCurveTo(0, -s * 1.1, s * 0.85, -s * 0.55); ctx.closePath();
+  ctx.fillStyle = '#f5b942'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#c9772b'; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.fillStyle = '#d9472b';
+  ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.22, s * 0.17, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(s * 0.2, s * 0.12, s * 0.14, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+const bounceScale = node => {
+  const t0 = bounces.get(node); if (t0 == null) return 1;
+  const t = (NOW - t0) / 1000; if (t < 0 || t > 1.3) return 1;
+  return 1 + 0.38 * Math.sin(t * 17) * Math.exp(-t * 6);
+};
+const introScale = delayMs => { const p = clamp01((NOW - levelT0 - delayMs) / 380); return p <= 0 ? 0 : easeOutBack(p); };
+
+function draw() {
+  if (!level) return;
+  const N = level.nodes, sp = CFG.spacing, mg = CFG.margin, ms = NOW - levelT0, flip = level.flip;
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  ctx.fillStyle = COL.bg; ctx.fillRect(0, 0, view.w, view.h);
+  ctx.translate(view.ox, view.oy); ctx.scale(view.s, view.s);
+  const gp = (c, r) => flip ? { x: mg + r * sp, y: mg + c * sp } : { x: mg + c * sp, y: mg + r * sp };
+
+  // terrain
+  ctx.globalAlpha = clamp01(ms / 400);
+  if (level.old) {
+    const a = gp(level.old.c, level.old.r);
+    ctx.fillStyle = COL.old; ctx.beginPath(); ctx.roundRect(a.x - 24, a.y - 24, 2 * sp + 48, 2 * sp + 48, 28); ctx.fill();
+  }
+  for (const p of level.parks) {
+    const a = gp(p.c - 1, p.r - 1);
+    ctx.fillStyle = COL.park; ctx.beginPath(); ctx.roundRect(a.x + 14, a.y + 14, 2 * sp - 28, 2 * sp - 28, 18); ctx.fill();
+    ctx.fillStyle = COL.tree;
+    for (const [dx, dy, r] of [[.6, .65, 13], [1.25, .55, 10], [1.0, 1.15, 15], [.55, 1.35, 9], [1.4, 1.4, 11]]) {
+      ctx.beginPath(); ctx.arc(a.x + (flip ? dy : dx) * sp, a.y + (flip ? dx : dy) * sp, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (level.river) {   // runs across the whole screen, between grid columns k and k+1
+    const rv = level.river, along0 = flip ? -view.ox / view.s - 20 : -view.oy / view.s - 20;
+    const along1 = flip ? (view.w - view.ox) / view.s + 20 : (view.h - view.oy) / view.s + 20;
+    ctx.beginPath();
+    for (let u = along0; u <= along1; u += 12) {
+      const v = rv.x + 8 * Math.sin(u / 85 + rv.phase);
+      const x = flip ? u : v, y = flip ? v : u;
+      u === along0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = COL.river; ctx.lineWidth = 52; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // roads grow outward from the pizzeria on level start
+  ctx.lineCap = 'round';
+  for (const e of level.edges) {
+    const p = clamp01((ms - e.delay) / 260); if (p <= 0) continue;
+    const q = easeOutCubic(p), A = lerp(e.mid, N[e.a], q), B = lerp(e.mid, N[e.b], q);
+    const [color, w] = COL.road[e.type];
+    ctx.strokeStyle = color; ctx.lineWidth = w;
+    if (e.type === 'alley') ctx.setLineDash([5, 7]);
+    line(A, B); ctx.setLineDash([]);
+    if (e.bridge && p >= 1) {
+      const a0 = N[e.a], b0 = N[e.b], ang = Math.atan2(b0.y - a0.y, b0.x - a0.x), off = w / 2 + 4;
+      const ox = -Math.sin(ang) * off, oy = Math.cos(ang) * off, s0 = lerp(a0, b0, 0.2), s1 = lerp(a0, b0, 0.8);
+      ctx.strokeStyle = COL.rail; ctx.lineWidth = 2;
+      line({ x: s0.x + ox, y: s0.y + oy }, { x: s1.x + ox, y: s1.y + oy });
+      line({ x: s0.x - ox, y: s0.y - oy }, { x: s1.x - ox, y: s1.y - oy });
+    }
+  }
+
+  // solver's best route (hint): marching dashed line
+  if (showBest && optimal && phase === 'plan') {
+    strokeRounded(optimal.path.map(n => N[n]), COL.best, 4, { alpha: 0.85, dash: [10, 9], dashOff: -NOW / 40 });
+  }
+
+  // player's line
+  if (phase === 'drive') {
+    const r = drive.r, color = drive.who === 'player' ? COL.route : COL.best;
+    strokeRounded(r.path.map(n => N[n]), color, 8, { alpha: 0.28 });
+    const done = r.path.slice(0, drive.seg + 1).map(n => N[n]); done.push(drive.pos);
+    strokeRounded(done, color, 8);
+  } else {
+    if (preview && !drag) strokeRounded(preview.map(n => N[n]), COL.route, 5, { alpha: 0.4, dash: [2, 10] });
+    const pts = growingPoints(route, addedAt);
+    strokeRounded(pts, COL.route, 8);
+    terminalBar(pts, COL.route);
+    // brake points: white dots where the courier has to slow down a lot
+    for (let i = 1; i < route.length - 1; i++) {
+      if (evalR.stop[i] || NOW < addedAt[i + 1] + 140) continue;
+      const ratio = evalR.v[i] / P.vMax; if (ratio >= 0.75) continue;
+      const n = N[route[i]], pop = easeOutBack(clamp01((NOW - addedAt[i + 1] - 140) / 300));
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(n.x, n.y, 5.5 * pop, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = ratio < 0.4 ? COL.ink : COL.amber; ctx.beginPath(); ctx.arc(n.x, n.y, 2.6 * pop, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  for (const rt of retracts) {
+    const p = clamp01((NOW - rt.t0) / 150); if (p >= 1) { rt.dead = true; continue; }
+    if (p <= 0) { strokeRounded([N[rt.a], N[rt.b]], COL.route, 8); continue; }
+    strokeRounded([N[rt.a], lerp(N[rt.a], N[rt.b], 1 - easeOutCubic(p))], COL.route, 8);
+  }
+  retracts = retracts.filter(r => !r.dead);
+
+  // next-step hints around the end of the line
+  if (phase === 'plan') {
+    const end = route[route.length - 1], stations = new Set([level.pizzeria, ...level.houses]);
+    for (const { to } of level.adj[end]) {
+      if (stations.has(to)) continue;
+      const n = N[to], rr = 5 + Math.sin(NOW / 260) * 0.8;
+      ctx.strokeStyle = COL.route; ctx.globalAlpha = to === hover ? 0.9 : 0.4; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(n.x, n.y, rr, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    if (hover != null && !stations.has(hover)) {
+      ctx.fillStyle = COL.route; ctx.beginPath(); ctx.arc(N[hover].x, N[hover].y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    if (drag && cursor) {   // rubber band from the end of the line to the cursor
+      strokeRounded([N[end], cursor], COL.route, 6, { alpha: 0.35 });
+      ctx.fillStyle = COL.route; ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(cursor.x, cursor.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // pizzeria
+  const pz = N[level.pizzeria], ps = introScale(250) * bounceScale(level.pizzeria);
+  if (ps > 0) {
+    ctx.save(); ctx.translate(pz.x, pz.y); ctx.scale(ps, ps);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = COL.ink; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.roundRect(-17, -17, 34, 34, 10); ctx.fill(); ctx.stroke();
+    drawSlice(0, 1, 9);
+    ctx.restore();
+  }
+
+  // houses
+  const planned = new Map(evalR.deliveries.map((d, k) => [d.house, k + 1]));
+  const bestOrder = showBest && optimal ? new Map(optimal.deliveries.map((d, k) => [d.house, k + 1])) : null;
+  level.houses.forEach((h, i) => {
+    const n = N[h], s = introScale(650 + i * 110) * bounceScale(h);
+    if (s <= 0) return;
+    const delivered = phase === 'drive' ? drive.delivered.has(i) : false;
+    ctx.save(); ctx.translate(n.x, n.y); ctx.scale(s, s);
+    shapePath(i, 11);
+    ctx.fillStyle = delivered ? (drive.who === 'player' ? COL.route : COL.best) : '#fff'; ctx.fill();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = COL.ink; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.restore();
+    if (!delivered) drawSlice(n.x, n.y - 27 + Math.sin(NOW / 420 + i * 1.7) * 2, 7 * Math.min(1, s));
+    ctx.font = '600 12px "Avenir Next", Avenir, system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (phase === 'plan' && planned.has(i)) { ctx.fillStyle = COL.route; ctx.fillText(planned.get(i), n.x + 19, n.y + 15); }
+    if (bestOrder && phase === 'plan') { ctx.fillStyle = COL.best; ctx.fillText(bestOrder.get(i), n.x - 19, n.y + 15); }
+  });
+
+  // courier: a little Mini Metro "train" carrying a pizza box
+  if (phase === 'drive') {
+    const color = drive.who === 'player' ? COL.ink : COL.best;
+    ctx.save(); ctx.translate(drive.pos.x, drive.pos.y); ctx.rotate(drive.ang);
+    if (drive.v > P.vMax * 0.7) {   // speed lines
+      ctx.strokeStyle = color; ctx.globalAlpha = 0.25; ctx.lineWidth = 2;
+      line({ x: -16, y: -4 }, { x: -26, y: -4 }); line({ x: -18, y: 4 }, { x: -30, y: 4 });
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-12, -7, 24, 14, 4); ctx.fill();
+    ctx.fillStyle = '#f3efe5'; ctx.fillRect(-5, -4, 8, 8);
+    ctx.restore();
+  }
+
+  // effects
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const fx of effects) {
+    const t = (NOW - fx.t0) / fx.dur;
+    if (t < 0) continue;
+    if (t > 1) { fx.dead = true; continue; }
+    if (fx.type === 'ring') {
+      ctx.globalAlpha = 1 - t; ctx.strokeStyle = fx.color; ctx.lineWidth = 3 * (1 - t) + 0.5;
+      ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.r0 + (fx.r1 - fx.r0) * easeOutCubic(t), 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.globalAlpha = t < 0.12 ? t / 0.12 : t > 0.6 ? (1 - t) / 0.4 : 1;
+      ctx.fillStyle = fx.color; ctx.font = '600 13px "Avenir Next", Avenir, system-ui';
+      ctx.fillText(fx.text, fx.x, fx.y - 22 * easeOutCubic(t));
+    }
+  }
+  ctx.globalAlpha = 1;
+  effects = effects.filter(f => !f.dead);
+}
+
+// ---------- HUD ----------
+const DIAL_C = 2 * Math.PI * 44;
+$('#dialArc').style.strokeDasharray = DIAL_C;
+function setDial(frac, text, sub, color) {
+  const arc = $('#dialArc');
+  arc.style.strokeDashoffset = DIAL_C * (1 - clamp01(frac)); arc.style.stroke = color;
+  $('#dialTime').textContent = text; $('#dialSub').textContent = sub;
+}
+function updateHud() {
+  if (!level) return;
+  const m = level.houses.length;
+  $('#orderRow').innerHTML = level.houses.map((h, i) => {
+    const d = evalR.deliveries.findIndex(x => x.house === i);
+    return `<span class="o ${d >= 0 ? 'done' : ''}">${shapeSVG(i, d >= 0)}${d >= 0 ? `<i>${d + 1}</i>` : ''}</span>`;
+  }).join('');
+  if (phase === 'plan') {
+    let sub = 'planning';
+    if (evalR.complete) sub = optimal ? `${'★'.repeat(starsFor(evalR.total / optimal.total))} estimate` : 'estimate';
+    setDial(evalR.deliveries.length / m, fmt(evalR.total), sub, COL.route);
+  }
+  $('#par').innerHTML = optimal
+    ? `★★★ under ${fmt(optimal.total * 1.05)}<br>★★ under ${fmt(optimal.total * 1.2)}`
+    : 'finding best route…';
+  const plan = phase === 'plan', go = $('#bGo'), icon = plan ? 'play' : 'skip';
+  go.disabled = plan && !evalR.complete;
+  if (go.dataset.icon !== icon) { go.dataset.icon = icon; go.innerHTML = ICON[icon]; }
+  go.title = plan ? 'Deliver (Enter)' : 'Skip';
+  go.setAttribute('aria-label', plan ? 'Deliver' : 'Skip');
+  go.classList.toggle('ready', plan && evalR.complete && $('#result').classList.contains('hidden'));
+  $('#bUndo').disabled = !plan || route.length < 2;
+  $('#bClear').disabled = !plan || route.length < 2;
+  $('#bHint').disabled = !plan || !optimal;
+  $('#bHint').classList.toggle('on', showBest);
+  const tips = $('#tips'), tip = levelIdx === 0 && plan;
+  tips.classList.toggle('hidden', !tip);
+  if (tip) tips.innerHTML = evalR.complete
+    ? 'Every house is on your route. Press the <b>red button</b> to deliver.'
+    : `<b>Drag</b> from the pizzeria along the streets, or <b>${TAP}</b> a crossing. Visit every house.`;
+  $('#turnInfo').textContent =
+    `Corner limits → 45°: ${kmh(P.vMax * cornerFactor(Math.PI / 4))} km/h · 90°: ${kmh(P.vMax * cornerFactor(Math.PI / 2))} km/h`;
+}
+function orderSVG(r) { return r.deliveries.map(d => shapeSVG(d.house, true, 18)).join('<span>›</span>'); }
+function showResult(r) {
+  const ratio = r.total / optimal.total, stars = starsFor(ratio), beat = ratio < 0.995, diff = r.total - optimal.total;
+  const pb = levelIdx != null && record(levelIdx, stars, r.total);
+  const last = levelIdx == null || levelIdx >= LEVELS.length - 1;
+  const note = beat ? 'The solver only checks a limited set of paths.' : pb ? 'New personal best!' : '';
+  $('#resultCard').innerHTML = `
+    <h2>${beat ? 'You beat the solver!' : ['', 'Delivered', 'Nice route', 'Perfect route'][stars]}</h2>
+    <div class="stars">${[1, 2, 3].map(k => `<span class="${k <= stars ? 'on' : ''}" style="animation-delay:${0.1 + k * 0.17}s">★</span>`).join('')}</div>
+    ${note ? `<div class="note">${note}</div>` : ''}
+    <div class="rows">
+      <span>Your time</span><b>${fmt(r.total)}</b>
+      <span>Best time</span><b>${fmt(optimal.total)}</b>
+      <span>Difference</span><b>${diff >= 0 ? '+' : ''}${diff.toFixed(1)}s (${((ratio - 1) * 100).toFixed(1)}%)</b>
+    </div>
+    <div class="ordr"><span>Your order</span><div>${orderSVG(r)}</div><span>Best order</span><div>${orderSVG(optimal)}</div></div>
+    <div class="btns">
+      <button class="btn" id="rRetry">Retry</button>
+      <button class="btn" id="rWatch">Watch best</button>
+      <button class="btn primary" id="rNext">${levelIdx == null ? 'New map' : last ? 'Random map' : 'Next ›'}</button>
+    </div>`;
+  $('#result').classList.remove('hidden');
+  $('#rRetry').onclick = hideResult;
+  $('#rWatch').onclick = () => startDrive(optimal, 'opt');
+  $('#rNext').onclick = () => last ? randomMap() : setLevel(LEVELS[levelIdx + 1], levelIdx + 1);
+  SFX.stars(stars); haptic('success');
+  updateHud();
+}
+function hideResult() { $('#result').classList.add('hidden'); updateHud(); }
+
+const OVERLAYS = ['levels', 'settings', 'howto', 'privacy'];
+function openOverlay(id) { OVERLAYS.forEach(o => $('#' + o).classList.toggle('hidden', o !== id)); }
+function closeOverlays() { OVERLAYS.forEach(o => $('#' + o).classList.add('hidden')); }
+function openLevels() {
+  const st = SAVE.stars, stars = n => `${'★'.repeat(n)}<span style="color:#e4ddcd">${'★'.repeat(3 - n)}</span>`;
+  $('#levelsGrid').innerHTML = LEVELS.map((d, i) => {
+    const open = unlocked(i);
+    return `<button class="lv ${i === levelIdx ? 'cur' : ''}" data-i="${i}" ${open ? '' : 'disabled'}><b>${i + 1}</b><small>${d.name}</small>
+      <span>${open ? stars(st[i] || 0) : ICON.lock}</span></button>`;
+  }).join('') + `<button class="lv wide ${levelIdx == null ? 'cur' : ''}" data-i="r" ${unlocked(LEVELS.length) ? '' : 'disabled'}>
+      <small>Random city</small><span>${unlocked(LEVELS.length) ? '<span style="color:var(--muted);letter-spacing:.04em">a new map every time</span>' : ICON.lock + '<span style="color:var(--muted);letter-spacing:.04em"> finish level 9</span>'}</span></button>`;
+  $('#levelsGrid').querySelectorAll('.lv').forEach(b => b.onclick = () => {
+    if (b.dataset.i === 'r') randomMap(LEVELS.length - 1); else setLevel(LEVELS[+b.dataset.i], +b.dataset.i);
+  });
+  openOverlay('levels');
+}
+function randomMap(baseIdx = levelIdx ?? LEVELS.length - 1) {
+  const base = LEVELS[baseIdx];
+  for (let k = 0; k < 5; k++) {
+    try { setLevel({ ...base, name: 'Random', seed: Math.floor(Math.random() * 1e6) }, null); return; } catch {}
+  }
+}
+function toast(title, sub) {
+  const t = $('#toast');
+  $('#toastTitle').textContent = title; $('#toastSub').textContent = sub;
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+}
+
+// ---------- settings ----------
+function openSettings() {
+  $('#sSound').checked = SAVE.settings.sound;
+  $('#sHaptics').checked = SAVE.settings.haptics;
+  $('#tPlay').value = CFG.playback; $('#oPlay').textContent = CFG.playback + '×';
+  const reset = $('#bReset'); reset.classList.remove('armed'); reset.textContent = 'Reset progress';
+  openOverlay('settings');
+}
+$('#sSound').addEventListener('change', ev => { SAVE.settings.sound = ev.target.checked; persist(); SFX.unlock(); });
+$('#sHaptics').addEventListener('change', ev => { SAVE.settings.haptics = ev.target.checked; persist(); haptic('light'); });
+$('#tPlay').addEventListener('input', ev => { CFG.playback = +ev.target.value; $('#oPlay').textContent = CFG.playback + '×'; });
+$('#tPlay').addEventListener('change', () => { SAVE.settings.playback = CFG.playback; persist(); });
+let resetTimer;
+$('#bReset').addEventListener('click', ev => {
+  const b = ev.currentTarget;
+  if (!b.classList.contains('armed')) {
+    b.classList.add('armed'); b.textContent = 'Tap again to erase all stars';
+    clearTimeout(resetTimer); resetTimer = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Reset progress'; }, 3000);
+    return;
+  }
+  clearTimeout(resetTimer);
+  SAVE.stars = {}; SAVE.best = {}; SAVE.level = 0; persist();
+  haptic('medium');
+  setLevel(LEVELS[0], 0);
+});
+$('#bHowto').onclick = () => openOverlay('howto');
+$('#bPrivacy').onclick = () => openOverlay('privacy');
+$('#bPrivacyOk').onclick = closeOverlays;
+$('#bHowtoOk').onclick = () => {
+  closeOverlays();
+  if (!SAVE.howto) { SAVE.howto = true; persist(); replayIntro(); }
+};
+for (const id of OVERLAYS) $('#' + id).addEventListener('click', ev => { if (ev.target.id === id) id === 'howto' ? $('#bHowtoOk').click() : closeOverlays(); });
+
+// ---------- input ----------
+function worldPt(ev) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (ev.clientX - r.left - view.ox) / view.s, y: (ev.clientY - r.top - view.oy) / view.s };
+}
+function pickNode(p, radiusPx = 24) {
+  let best = null, bd = radiusPx / view.s;
+  for (const n of level.nodes) {
+    if (n.hidden) continue;
+    const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < bd) { bd = d; best = n.id; }
+  }
+  return best;
+}
+// dragging snaps the line onto the next crossing; dragging back over the line erases it
+function dragStep(p) {
+  const N = level.nodes;
+  for (let guard = 0; guard < 10; guard++) {
+    const end = route[route.length - 1], prev = route.length > 1 ? route[route.length - 2] : null, E = N[end];
+    if (prev != null && Math.hypot(N[prev].x - p.x, N[prev].y - p.y) < 32) { undo(); continue; }
+    const vx = p.x - E.x, vy = p.y - E.y, vd = Math.hypot(vx, vy);
+    let pickTo = null;
+    for (const { to } of level.adj[end]) {
+      if (to === prev) continue;
+      const T = N[to], tx = T.x - E.x, ty = T.y - E.y, td = Math.hypot(tx, ty);
+      const near = Math.hypot(T.x - p.x, T.y - p.y) < 32;
+      const past = vd > td * 0.85 && (vx * tx + vy * ty) / (vd * td) > 0.93;
+      if (near || past) { pickTo = to; break; }
+    }
+    if (pickTo == null) return;
+    addNodes([pickTo]);
+  }
+}
+canvas.addEventListener('pointerdown', ev => {
+  if (phase !== 'plan' || ev.button !== 0 || (activePointer != null && !ev.isPrimary)) return;
+  activePointer = ev.pointerId;
+  const touch = ev.pointerType !== 'mouse', blockPx = CFG.spacing * view.s;   // fingers get bigger targets, capped so neighbours stay separate
+  const p = worldPt(ev), end = level.nodes[route[route.length - 1]];
+  if (Math.hypot(end.x - p.x, end.y - p.y) * view.s < Math.min(touch ? 40 : 30, blockPx * 0.45)) {
+    drag = true; cursor = p; preview = null; canvas.setPointerCapture(ev.pointerId);
+  } else pressNode = pickNode(p, Math.min(touch ? 34 : 24, blockPx * 0.5));
+});
+canvas.addEventListener('pointermove', ev => {
+  if (phase !== 'plan' || (activePointer != null && ev.pointerId !== activePointer)) return;
+  const p = worldPt(ev); cursor = p;
+  if (drag) { dragStep(p); return; }
+  const touch = ev.pointerType !== 'mouse', n = pickNode(p, touch ? Math.min(34, CFG.spacing * view.s * 0.5) : 24), end = route[route.length - 1];
+  canvas.style.cursor = n === end ? 'grab' : n == null ? 'default' : 'pointer';
+  if (n !== hover) { hover = n; preview = pathTo(n); }
+});
+window.addEventListener('pointerup', ev => {   // on window: the finger may be lifted over a HUD button
+  if (ev.pointerId !== activePointer) return;
+  activePointer = null;
+  if (drag) { drag = null; cursor = null; return; }
+  if (phase !== 'plan' || pressNode == null) return;
+  const touch = ev.pointerType !== 'mouse', n = pickNode(worldPt(ev), touch ? Math.min(34, CFG.spacing * view.s * 0.5) : 24);
+  if (n === pressNode) { const p = pathTo(n); if (p) addNodes(p.slice(1)); preview = null; hover = null; }
+  pressNode = null;
+});
+window.addEventListener('pointercancel', ev => {
+  if (ev.pointerId !== activePointer) return;
+  activePointer = null; drag = null; cursor = null; pressNode = null; hover = null; preview = null;
+});
+canvas.addEventListener('pointerleave', () => { if (!drag) { hover = null; preview = null; } });
+canvas.addEventListener('contextmenu', ev => { ev.preventDefault(); undo(); });
+window.addEventListener('keydown', ev => {
+  if (ev.target.tagName === 'INPUT') return;
+  if (ev.key === 'Escape') { closeOverlays(); hideResult(); }
+  if (phase !== 'plan') { if (ev.key === 'Enter') drive.simT = drive.r.total; return; }
+  if (ev.key === 'Backspace' || ev.key === 'z') { ev.preventDefault(); undo(); }
+  if (ev.key === 'Enter' && evalR.complete) startDrive(evalR, 'player');
+  if (ev.key === 'h' && optimal) { showBest = !showBest; updateHud(); }
+});
+$('#bGo').onclick = () => phase === 'drive' ? (drive.simT = drive.r.total) : startDrive(evalR, 'player');
+$('#bUndo').onclick = undo;
+$('#bClear').onclick = clearRoute;
+$('#bHint').onclick = () => { showBest = !showBest; haptic('selection'); updateHud(); };
+$('#bLevels').onclick = openLevels;
+$('#bSettings').onclick = openSettings;
+$('#bRandom').onclick = () => randomMap();
+
+// ---------- tuning (dev builds, or ?dev in a browser) ----------
+const physicsChanged = () => { refresh(); hideResult(); clearTimeout(tuneTimer); tuneTimer = setTimeout(resolve, 150); };
+const tunables = [
+  ['Vmax', () => kmh(P.vMax), v => { P.vMax = v / 3.6; physicsChanged(); }, v => v],
+  ['Acc', () => P.a, v => { P.a = v; physicsChanged(); }, v => v.toFixed(1)],
+  ['Brk', () => P.b, v => { P.b = v; physicsChanged(); }, v => v.toFixed(1)],
+  ['Harsh', () => P.harsh, v => { P.harsh = v; physicsChanged(); }, v => v === 0 ? 'off' : v.toFixed(1)],
+];
+for (const [name, get, set, show] of tunables) {
+  const input = $('#t' + name), out = $('#o' + name);
+  input.value = get(); out.textContent = show(get());
+  input.addEventListener('input', () => {
+    if (phase === 'drive') { input.value = get(); return; }
+    const v = parseFloat(input.value); out.textContent = show(v); set(v);
+  });
+}
+$('#tReturn').addEventListener('change', ev => {
+  if (phase === 'drive') { ev.target.checked = CFG.returnHome; return; }
+  CFG.returnHome = ev.target.checked; refresh(); hideResult(); resolve();
+});
+
+// ---------- shell hooks (also used by the screenshot/smoke-test scripts) ----------
+function applyInsets(i) {
+  const s = document.documentElement.style;
+  s.setProperty('--sat', (+i.top || 0) + 'px'); s.setProperty('--sar', (+i.right || 0) + 'px');
+  s.setProperty('--sab', (+i.bottom || 0) + 'px'); s.setProperty('--sal', (+i.left || 0) + 'px');
+}
+window.PC = {
+  LEVELS, save: SAVE,
+  get level() { return level; }, get levelIdx() { return levelIdx; }, get optimal() { return optimal; },
+  get phase() { return phase; }, get solvedBy() { return solvedBy; }, get evalR() { return evalR; }, get view() { return view; },
+  setLevel: i => setLevel(LEVELS[i], i),
+  planBest() { if (!optimal || phase !== 'plan') return false; clearRoute(); retracts = []; addNodes(optimal.path.slice(1)); return true; },
+  freezeDrive(frac) { if (!evalR.complete) return false; startDrive(evalR, 'player'); CFG.playback = 0; drive.simT = frac * drive.r.total; return true; },
+  toScreen(id) { const n = level.nodes[id]; return { x: view.ox + n.x * view.s, y: view.oy + n.y * view.s }; },
+  fromNative(msg) { if (msg && msg.insets) { applyInsets(msg.insets); resize(); } },
+};
+
+// ---------- main loop ----------
+function frame(now) {
+  const dt = Math.min(0.05, (now - NOW) / 1000);
+  NOW = now;
+  if (phase === 'drive') stepDrive(dt);
+  draw();
+  if (!booted) { booted = true; post({ type: 'ready' }); }
+  requestAnimationFrame(frame);
+}
+document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = ICON[el.dataset.icon]; });
+document.querySelectorAll('.tapWord').forEach(el => { el.textContent = TAP; });
+$('#dev').classList.toggle('hidden', !DEV);
+$('#hapticsRow').classList.toggle('hidden', !HOST);
+$('#ver').textContent = HOST && HOST.version ? `Version ${HOST.version}${HOST.build ? ` (${HOST.build})` : ''}` : 'Web build';
+if (HOST && HOST.insets) applyInsets(HOST.insets);
+CFG.playback = Math.max(1, +SAVE.settings.playback || 10);
+window.addEventListener('resize', resize);
+{
+  let start = SAVE.level;
+  if (!(Number.isInteger(start) && start >= 0 && start < LEVELS.length && unlocked(start))) {
+    start = 0;
+    while (start < LEVELS.length - 1 && SAVE.stars[start] && unlocked(start + 1)) start++;
+  }
+  setLevel(LEVELS[start], start);
+  if (!SAVE.howto) openOverlay('howto');
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

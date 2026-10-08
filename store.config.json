@@ -1,0 +1,34 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 REPLACE_WITH_YOUR_NAME",
+    "categories": [["GAMES", "GAMES_PUZZLE", "GAMES_STRATEGY"]],
+    "info": {
+      "en-US": {
+        "title": "Pizza Courier: Route Puzzle",
+        "subtitle": "Plan the fastest delivery",
+        "promoText": "Draw one route, deliver every pizza, beat the clock. A calm route-planning puzzle where every corner costs time.",
+        "description": "Plan one route from the pizzeria through every house, then watch your courier drive it.\n\nThe catch: the shortest route is often not the fastest. Your courier accelerates, brakes for every corner and stops at each door, so every turn costs time. Find the line that flows.\n\nTWO DECISIONS PER CITY\nThe order of the deliveries, and the streets between them. Simple to start, surprisingly deep to master.\n\nFEATURES\n• 9 cities that introduce a park, an old town of slow alleys, a diagonal boulevard and a river with only two bridges\n• A real driving model: speed limits, acceleration, braking and cornering\n• See where you lose time: white dots mark every hard brake on your line\n• Compare with the best possible route and earn up to three stars\n• Watch the best delivery, then try to match it\n• Endless random cities once you finish the shift\n• Calm, minimalist look with soft sounds and haptics\n• No ads, no accounts, no tracking. Plays fully offline.",
+        "keywords": ["delivery", "map", "city", "traffic", "road", "path", "planner", "logic", "brain", "minimal", "strategy", "driving", "shortest", "salesman"],
+        "privacyPolicyUrl": "https://umutkarr.github.io/pizza-courier/privacy-policy.html",
+        "supportUrl": "https://umutkarr.github.io/pizza-courier/support.html"
+      }
+    },
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "gambling": false,
+      "unrestrictedWebAccess": false
+    }
+  }
+}
